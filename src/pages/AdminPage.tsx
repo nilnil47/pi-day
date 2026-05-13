@@ -35,7 +35,8 @@ export function AdminPage() {
         return
       }
       if (name === 'admin_start') setStatus('התחרות החלה. המשתתפים יכולים להקליד ספרות.')
-      if (name === 'admin_reset_round') setStatus('איפוס סיבוב: כל המשתתפים חזרו ל־0, מצב ממתין.')
+      if (name === 'admin_reset_round')
+        setStatus('איפוס סיבוב: כל המשתתפים חזרו ל־0 ספרות ול־0 טעויות, מצב ממתין.')
       if (name === 'admin_finish') setStatus('התחרות סומנה כהסתיימה.')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'שגיאה')
@@ -105,8 +106,8 @@ export function AdminPage() {
           </div>
 
           <p className="muted small">
-            איפוס מנקה ניקוד ומחזיר את כולם למשחק (לפני תחרות חדשה). "סיים תחרות" נועל הקלדה עד איפוס/התחלה
-            מחדש לפי ההגדרות שלכם במסך המשחק.
+            איפוס מנקה ניקוד, מאפס מונה טעויות (שלוש עד פסילה), ומחזיר את כולם למשחק. "סיים תחרות" נועל הקלדה עד
+            איפוס/התחלה מחדש לפי ההגדרות שלכם במסך המשחק.
           </p>
         </form>
       )}

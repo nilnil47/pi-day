@@ -7,6 +7,7 @@ export type ParticipantRow = {
   display_name: string
   avatar_type: number
   digits_correct: number
+  wrong_attempts: number
   eliminated: boolean
   joined_at: string
   last_input_at: string | null

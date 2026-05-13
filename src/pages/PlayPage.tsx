@@ -6,6 +6,8 @@ import type { CompetitionStatus, ParticipantRow } from '../types'
 import { getCompetitionId, isConfigComplete } from '../lib/config'
 import { createSupabaseClient } from '../lib/supabase'
 
+const MAX_WRONG_ATTEMPTS = 3
+
 export function PlayPage() {
   const ready = isConfigComplete()
   const competitionId = useMemo(() => getCompetitionId()!, [])
@@ -153,6 +155,7 @@ export function PlayPage() {
           correct?: boolean
           eliminated?: boolean
           digits?: number
+          wrong_attempts?: number
         }
         if (p.error === 'eliminated') {
           setMessage('כבר נפסלת בתחרות הזאת.')
@@ -161,7 +164,14 @@ export function PlayPage() {
         } else if (p.error) {
           setMessage(p.error)
         } else if (p.eliminated) {
-          setMessage('אופס! הספרה לא נכונה — נפסלת מהתחרות.')
+          setMessage(`אופס! הספרה לא נכונה — נפסלת מהתחרות אחרי ${MAX_WRONG_ATTEMPTS} טעויות.`)
+        } else if (p.correct === false && typeof p.wrong_attempts === 'number') {
+          const left = MAX_WRONG_ATTEMPTS - p.wrong_attempts
+          if (left === 1) {
+            setMessage('אופס! הספרה לא נכונה. נותר לך ניסיון אחד לפני פסילה.')
+          } else {
+            setMessage(`אופס! הספרה לא נכונה. נותרו ${left} ניסיונות עד פסילה.`)
+          }
         }
         await refreshAll()
         await refreshSelf()
@@ -239,6 +249,9 @@ export function PlayPage() {
               <div>
                 <div className="player-name">{self.display_name}</div>
                 <div className="muted">ספרות נכונות: {self.digits_correct}</div>
+                <div className="muted">
+                  טעויות מצטברות: {self.wrong_attempts ?? 0}/{MAX_WRONG_ATTEMPTS}
+                </div>
               </div>
             </div>
 
@@ -254,7 +267,10 @@ export function PlayPage() {
               </div>
             ) : (
               <>
-                <p className="hint">הקלידו ספרות 0–9 במקלדת או בלוח למטה. הספרה הראשונה היא 3, אחר כך 1, ואז 4…</p>
+                <p className="hint">
+                  הקלידו ספרות 0–9 במקלדת או בלוח למטה. הספרה הראשונה היא 3, אחר כך 1, ואז 4… ניתן לטעות עד{' '}
+                  {MAX_WRONG_ATTEMPTS} פעמים לפני פסילה.
+                </p>
                 <div className="digit-display" aria-live="polite">
                   {self.digits_correct}
                 </div>
