@@ -1,13 +1,16 @@
 import type { ReactNode } from 'react'
-import { Link, NavLink, Route, Routes } from 'react-router-dom'
+import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { AdminPage } from './pages/AdminPage'
 import { HomePage } from './pages/HomePage'
 import { JoinPage } from './pages/JoinPage'
 import { PlayPage } from './pages/PlayPage'
 
 function Layout({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation()
+  const shellClass = pathname === '/play' ? 'app-shell app-shell--play' : 'app-shell'
+
   return (
-    <div className="app-shell">
+    <div className={shellClass}>
       <header className="top-nav">
         <Link to="/" className="brand">
           <span className="brand__pi">π</span>

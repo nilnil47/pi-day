@@ -8,6 +8,21 @@ import { createSupabaseClient } from '../lib/supabase'
 
 const MAX_WRONG_ATTEMPTS = 3
 
+function isEditableTarget(t: EventTarget | null): boolean {
+  if (!(t instanceof HTMLElement)) return false
+  if (t.isContentEditable) return true
+  const tag = t.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+}
+
+/** ספרות לפי מיקום פיזי במקלדת (עובד גם כשהשפה בעברית) או לפי ev.key כגיבוי. */
+function digitFromKeyboard(ev: KeyboardEvent): string | null {
+  const fromCode = /^Digit([0-9])$/.exec(ev.code) ?? /^Numpad([0-9])$/.exec(ev.code)
+  if (fromCode) return fromCode[1]
+  if (/^[0-9]$/.test(ev.key)) return ev.key
+  return null
+}
+
 export function PlayPage() {
   const ready = isConfigComplete()
   const competitionId = useMemo(() => getCompetitionId()!, [])
@@ -188,10 +203,13 @@ export function PlayPage() {
     const handler = (ev: KeyboardEvent) => {
       if (status !== 'active') return
       if (!self || self.eliminated) return
+      if (ev.repeat) return
+      if (isEditableTarget(ev.target)) return
       if (ev.ctrlKey || ev.metaKey || ev.altKey) return
-      if (!/^[0-9]$/.test(ev.key)) return
+      const digit = digitFromKeyboard(ev)
+      if (!digit) return
       ev.preventDefault()
-      void onKey(ev.key)
+      void onKey(digit)
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -211,98 +229,119 @@ export function PlayPage() {
   }
 
   return (
-    <div className="play-layout">
-      <section className="play-main card">
-        <header className="play-head">
-          <div>
-            <h1>תחרות π</h1>
-            <p className="muted">
-              מצב:{' '}
-              <strong>
-                {status === 'waiting' && 'מחכים לאדמין'}
-                {status === 'active' && 'במהלך'}
-                {status === 'finished' && 'הסתיימה'}
-              </strong>
-            </p>
-          </div>
-          <div className="cta-row">
-            <Link className="btn btn-ghost" to="/join">
-              עריכת שם / אווטר
-            </Link>
-            <Link className="btn btn-ghost" to="/">
-              בית
-            </Link>
-          </div>
-        </header>
-
-        {!userId || !self ? (
-          <div className="notice">
-            <p>עדיין לא נרשמתם.</p>
-            <Link className="btn btn-primary" to="/join">
-              להצטרפות
-            </Link>
-          </div>
-        ) : (
-          <div className="player-panel">
-            <div className="player-panel__identity">
-              <AvatarArt id={self.avatar_type} size={64} />
-              <div>
-                <div className="player-name">{self.display_name}</div>
-                <div className="muted">ספרות נכונות: {self.digits_correct}</div>
-                <div className="muted">
-                  טעויות מצטברות: {self.wrong_attempts ?? 0}/{MAX_WRONG_ATTEMPTS}
-                </div>
-              </div>
-            </div>
-
-            {status !== 'active' ? (
-              <p className="notice-inline">
-                {status === 'waiting'
-                  ? 'כשהאדמין יתחיל את התחרות — תוכלו להקליד ספרות או להשתמש בלוח המקשים.'
-                  : 'התחרות הסתיימה. אפשר לראות את התוצאות בלוח המובילים.'}
+    <div className="play-page">
+      <div className="play-layout">
+        <section className="play-main card">
+          <header className="play-head">
+            <div>
+              <h1>תחרות π</h1>
+              <p className="muted">
+                מצב:{' '}
+                <strong>
+                  {status === 'waiting' && 'מחכים לאדמין'}
+                  {status === 'active' && 'במהלך'}
+                  {status === 'finished' && 'הסתיימה'}
+                </strong>
               </p>
-            ) : self.eliminated ? (
-              <div className="notice notice--bad">
-                נפסלתם מהתחרות אבל עדיין מופיעים בלוח עם מספר הספרות שזכרתם.
+            </div>
+            <div className="cta-row">
+              <Link className="btn btn-ghost" to="/join">
+                עריכת שם / אווטר
+              </Link>
+              <Link className="btn btn-ghost" to="/">
+                בית
+              </Link>
+            </div>
+          </header>
+
+          {!userId || !self ? (
+            <div className="notice">
+              <p>עדיין לא נרשמתם.</p>
+              <Link className="btn btn-primary" to="/join">
+                להצטרפות
+              </Link>
+            </div>
+          ) : (
+            <div className="player-panel">
+              <div className="player-panel__identity">
+                <AvatarArt id={self.avatar_type} size={64} />
+                <div>
+                  <div className="player-name">{self.display_name}</div>
+                  <div className="muted">ספרות נכונות: {self.digits_correct}</div>
+                  <div className="muted">
+                    טעויות מצטברות: {self.wrong_attempts ?? 0}/{MAX_WRONG_ATTEMPTS}
+                  </div>
+                </div>
               </div>
-            ) : (
-              <>
-                <p className="hint">
-                  הקלידו ספרות 0–9 במקלדת או בלוח למטה. הספרה הראשונה היא 3, אחר כך 1, ואז 4… ניתן לטעות עד{' '}
-                  {MAX_WRONG_ATTEMPTS} פעמים לפני פסילה.
+
+              {status !== 'active' ? (
+                <p className="notice-inline">
+                  {status === 'waiting'
+                    ? 'כשהאדמין יתחיל את התחרות — תוכלו להקליד ספרות או להשתמש בלוח המקשים.'
+                    : 'התחרות הסתיימה. אפשר לראות את התוצאות בלוח המובילים.'}
                 </p>
-                <div className="digit-display" aria-live="polite">
-                  {self.digits_correct}
+              ) : self.eliminated ? (
+                <div className="notice notice--bad">
+                  נפסלתם מהתחרות אבל עדיין מופיעים בלוח עם מספר הספרות שזכרתם.
                 </div>
-                <p className="digit-caption">ספרות רצופות נכונות (מתחילות ב־3 של π)</p>
-                <div className="keypad" dir="ltr">
-                  {keypadDigits.map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      className="key"
-                      disabled={busyKey}
-                      onClick={() => void onKey(d)}
-                    >
-                      {d}
-                    </button>
-                  ))}
+              ) : (
+                <div
+                  className="play-active"
+                  role="application"
+                  aria-label="הקלדת ספרות למשחק π — מקשי 0 עד 9 או לוח מספרים"
+                >
+                  <p className="hint">
+                    הקלידו ספרות 0–9 במקלדת (גם כשהמקלדת מוגדרת לעברית — שורת הספרות העליונה) או בלוח. הספרה הראשונה
+                    היא 3, אחר כך 1, ואז 4… ניתן לטעות עד {MAX_WRONG_ATTEMPTS} פעמים לפני פסילה.
+                  </p>
+                  <p className="kbd-legend" aria-hidden="true">
+                    <span className="kbd-legend__label">מקלדת</span>
+                    {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map((k) => (
+                      <kbd key={k} className="kbd-pill">
+                        {k}
+                      </kbd>
+                    ))}
+                  </p>
+                  <div className="play-game">
+                    <div className="play-game__score">
+                      <div className="digit-display" aria-live="polite">
+                        {self.digits_correct}
+                      </div>
+                      <p className="digit-caption">ספרות רצופות נכונות (מתחילות ב־3 של π)</p>
+                    </div>
+                    <div className="play-game__keys">
+                      <p className="keypad-label muted small">או לוח מספרים</p>
+                      <div className="keypad" dir="ltr">
+                        {keypadDigits.map((d) => (
+                          <button
+                            key={d}
+                            type="button"
+                            className="key"
+                            disabled={busyKey}
+                            onClick={() => void onKey(d)}
+                          >
+                            {d}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
 
-        {message ? <p className="form-error">{message}</p> : null}
-      </section>
+          {message ? <p className="form-error">{message}</p> : null}
+        </section>
 
-      <aside className="play-side card">
-        <h2>לוח מובילים</h2>
-        <p className="muted small">
-          המיון לפי מספר ספרות נכון. במקרה של שוויון — מי שעדיין במשחק מדורג למעלה.
-        </p>
-        <Leaderboard rows={participants} selfUserId={userId} />
-      </aside>
+        <aside className="play-side card">
+          <h2>לוח מובילים</h2>
+          <p className="muted small">
+            המיון לפי מספר ספרות נכון. במקרה של שוויון — מי שעדיין במשחק מדורג למעלה.
+          </p>
+          <Leaderboard rows={participants} selfUserId={userId} />
+        </aside>
+      </div>
     </div>
   )
 }

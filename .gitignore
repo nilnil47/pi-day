@@ -13,6 +13,9 @@ dist-ssr
 *.local
 .env
 
+# Netlify CLI local state (do not commit)
+.netlify
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

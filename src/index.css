@@ -291,6 +291,21 @@ code {
   text-align: center;
 }
 
+.app-shell--play {
+  max-width: 1320px;
+}
+
+@media (min-width: 1100px) {
+  .app-shell--play {
+    padding-left: 1.75rem;
+    padding-right: 1.75rem;
+  }
+}
+
+.play-page {
+  width: 100%;
+}
+
 .play-layout {
   display: grid;
   grid-template-columns: 1.15fr 0.85fr;
@@ -301,6 +316,17 @@ code {
 @media (max-width: 960px) {
   .play-layout {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 1000px) {
+  .play-layout {
+    grid-template-columns: minmax(0, 1.38fr) minmax(280px, 1fr);
+    gap: 1.25rem;
+  }
+
+  .play-page .play-main {
+    padding: 1.35rem 1.5rem;
   }
 }
 
@@ -373,6 +399,101 @@ code {
   text-align: center;
   color: var(--muted);
   font-size: 0.95rem;
+}
+
+.play-active {
+  display: grid;
+  gap: 1rem;
+}
+
+.kbd-legend {
+  display: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+@media (min-width: 720px) {
+  .kbd-legend {
+    display: flex;
+  }
+}
+
+.kbd-legend__label {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-inline-end: 0.15rem;
+}
+
+.kbd-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.85rem;
+  padding: 0.22rem 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-family: inherit;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg2);
+  color: var(--ink);
+  box-shadow: 0 1px 0 color-mix(in oklab, var(--ink) 10%, transparent);
+}
+
+.play-game {
+  display: grid;
+  gap: 1.25rem;
+}
+
+@media (min-width: 880px) {
+  .play-game {
+    grid-template-columns: 1fr minmax(260px, 340px);
+    align-items: stretch;
+    gap: 1.5rem 2rem;
+  }
+
+  .play-game__score {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .play-game__score .digit-display {
+    font-size: clamp(3.5rem, 4.2vw, 5.75rem);
+    padding: 1rem 1.25rem;
+  }
+
+  .play-game__keys {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .play-game__keys .keypad {
+    margin: 0;
+    max-width: none;
+    gap: 0.65rem;
+  }
+
+  .play-game__keys .key {
+    padding: 1rem 0.5rem;
+    font-size: 1.35rem;
+    font-weight: 800;
+    min-height: 3.2rem;
+  }
+}
+
+.keypad-label {
+  margin: 0 0 0.5rem;
+  text-align: center;
+}
+
+@media (min-width: 880px) {
+  .keypad-label {
+    text-align: start;
+  }
 }
 
 .keypad {
