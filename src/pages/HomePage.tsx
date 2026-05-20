@@ -33,8 +33,8 @@ export function HomePage() {
         <Link className="btn btn-primary" to="/join">
           הצטרפות לתחרות
         </Link>
-        <Link className="btn" to="/play">
-          מסך משחק + לוח תוצאות
+        <Link className="btn btn-ghost" to="/play/test">
+          מצב בדיקה (ללא רשת)
         </Link>
         <Link className="btn btn-ghost" to="/admin">
           פאנל אדמין

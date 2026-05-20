@@ -7,7 +7,7 @@ import { PlayPage } from './pages/PlayPage'
 
 function Layout({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
-  const shellClass = pathname === '/play' ? 'app-shell app-shell--play' : 'app-shell'
+  const shellClass = pathname.startsWith('/play') ? 'app-shell app-shell--play' : 'app-shell'
 
   return (
     <div className={shellClass}>
@@ -22,6 +22,7 @@ function Layout({ children }: { children: ReactNode }) {
           </NavLink>
           <NavLink to="/join">הצטרפות</NavLink>
           <NavLink to="/play">משחק</NavLink>
+          <NavLink to="/play/test">בדיקה</NavLink>
           <NavLink to="/admin">אדמין</NavLink>
         </nav>
       </header>
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/join" element={<JoinPage />} />
         <Route path="/play" element={<PlayPage />} />
+        <Route path="/play/test" element={<PlayPage testMode />} />
         <Route path="/admin" element={<AdminPage />} />
       </Routes>
     </Layout>

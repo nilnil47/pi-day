@@ -1,12 +1,101 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Leaderboard } from '../components/Leaderboard'
+import { Leaderboard, rankSortParticipants } from '../components/Leaderboard'
 import { AvatarArt } from '../components/AvatarArt'
 import type { CompetitionStatus, ParticipantRow } from '../types'
 import { getCompetitionId, isConfigComplete } from '../lib/config'
 import { createSupabaseClient } from '../lib/supabase'
+import { PI_DIGITS } from '../data/piDigits'
 
 const MAX_WRONG_ATTEMPTS = 3
+
+/** מזהה יציב למצב בדיקה מקומית — תואם פורמט UUID */
+const TEST_LOCAL_USER_ID = '00000000-0000-4000-8000-0000000000aa'
+
+function createTestSelf(): ParticipantRow {
+  const now = new Date().toISOString()
+  return {
+    id: '00000000-0000-4000-8000-0000000000bb',
+    competition_id: '00000000-0000-4000-8000-0000000000cc',
+    user_id: TEST_LOCAL_USER_ID,
+    display_name: 'בדיקה מקומית',
+    avatar_type: 3,
+    digits_correct: 0,
+    wrong_attempts: 0,
+    eliminated: false,
+    joined_at: now,
+    last_input_at: null,
+  }
+}
+
+/** אותה לוגיקה כמו submit_digit בשרת — מול PI_DIGITS בלבד. */
+function localEvaluateDigit(self: ParticipantRow, digit: string): SubmitDigitPayload {
+  if (digit.length !== 1 || !/^[0-9]$/.test(digit)) {
+    return { error: 'invalid_digit' }
+  }
+  if (self.eliminated) {
+    return { error: 'eliminated', digits: self.digits_correct }
+  }
+  if (self.digits_correct >= PI_DIGITS.length) {
+    return { error: 'pi_data' }
+  }
+  const expected = PI_DIGITS[self.digits_correct]!
+  if (digit === expected) {
+    return { ok: true, correct: true, digits: self.digits_correct + 1 }
+  }
+  const newWrong = (self.wrong_attempts ?? 0) + 1
+  if (newWrong >= MAX_WRONG_ATTEMPTS) {
+    return {
+      ok: true,
+      correct: false,
+      eliminated: true,
+      wrong_attempts: newWrong,
+      digits: self.digits_correct,
+    }
+  }
+  return {
+    ok: true,
+    correct: false,
+    eliminated: false,
+    wrong_attempts: newWrong,
+    digits: self.digits_correct,
+  }
+}
+
+type SubmitDigitPayload = {
+  error?: string
+  ok?: boolean
+  correct?: boolean
+  eliminated?: boolean
+  digits?: number
+  wrong_attempts?: number
+}
+
+function patchRowsFromSubmitDigit(userId: string, p: SubmitDigitPayload, rows: ParticipantRow[]): ParticipantRow[] {
+  if (p.error) return rows
+  return [...rows]
+    .map((row) =>
+      row.user_id === userId
+        ? {
+            ...row,
+            digits_correct: typeof p.digits === 'number' ? p.digits : row.digits_correct,
+            wrong_attempts: typeof p.wrong_attempts === 'number' ? p.wrong_attempts : row.wrong_attempts,
+            eliminated: p.eliminated === true ? true : row.eliminated,
+          }
+        : row,
+    )
+    .sort(rankSortParticipants)
+}
+
+function patchSelfFromSubmitDigit(prev: ParticipantRow | null, p: SubmitDigitPayload): ParticipantRow | null {
+  if (!prev || p.error) return prev
+  return {
+    ...prev,
+    digits_correct: typeof p.digits === 'number' ? p.digits : prev.digits_correct,
+    wrong_attempts: typeof p.wrong_attempts === 'number' ? p.wrong_attempts : prev.wrong_attempts,
+    eliminated: p.eliminated === true ? true : prev.eliminated,
+  }
+}
 
 function isEditableTarget(t: EventTarget | null): boolean {
   if (!(t instanceof HTMLElement)) return false
@@ -23,9 +112,12 @@ function digitFromKeyboard(ev: KeyboardEvent): string | null {
   return null
 }
 
-export function PlayPage() {
-  const ready = isConfigComplete()
-  const competitionId = useMemo(() => getCompetitionId()!, [])
+export function PlayPage({ testMode = false }: { testMode?: boolean }) {
+  const ready = testMode || isConfigComplete()
+  const competitionId = useMemo(
+    () => (testMode ? '00000000-0000-4000-8000-0000000000cc' : getCompetitionId()!),
+    [testMode],
+  )
 
   const [status, setStatus] = useState<CompetitionStatus>('waiting')
   const [participants, setParticipants] = useState<ParticipantRow[]>([])
@@ -35,6 +127,7 @@ export function PlayPage() {
   const [busyKey, setBusyKey] = useState(false)
 
   const refreshSelf = useCallback(async () => {
+    if (testMode) return
     if (!ready) return
     const supabase = createSupabaseClient()
     const { data: sessionData } = await supabase.auth.getSession()
@@ -55,9 +148,10 @@ export function PlayPage() {
       return
     }
     setSelf((data as ParticipantRow | null) ?? null)
-  }, [competitionId, ready])
+  }, [competitionId, ready, testMode])
 
   const refreshAll = useCallback(async () => {
+    if (testMode) return
     if (!ready) return
     const supabase = createSupabaseClient()
     const { data: comp, error: cErr } = await supabase
@@ -81,16 +175,17 @@ export function PlayPage() {
       return
     }
     setParticipants((rows as ParticipantRow[]) ?? [])
-  }, [competitionId, ready])
+  }, [competitionId, ready, testMode])
 
   useEffect(() => {
+    if (testMode) return
     queueMicrotask(() => {
       void Promise.all([refreshAll(), refreshSelf()])
     })
-  }, [refreshAll, refreshSelf])
+  }, [refreshAll, refreshSelf, testMode])
 
   useEffect(() => {
-    if (!ready) return
+    if (!ready || testMode) return
     const supabase = createSupabaseClient()
 
     const participantChannel = supabase
@@ -130,19 +225,72 @@ export function PlayPage() {
       void supabase.removeChannel(participantChannel)
       void supabase.removeChannel(competitionChannel)
     }
-  }, [competitionId, ready, refreshAll, refreshSelf])
+  }, [competitionId, ready, refreshAll, refreshSelf, testMode])
 
   useEffect(() => {
+    if (testMode) return
     if (!ready) return
     const supabase = createSupabaseClient()
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
       void refreshSelf()
     })
     return () => sub.subscription.unsubscribe()
-  }, [ready, refreshSelf])
+  }, [ready, refreshSelf, testMode])
+
+  useEffect(() => {
+    if (!testMode) return
+    const s = createTestSelf()
+    setSelf(s)
+    setParticipants([s])
+    setUserId(TEST_LOCAL_USER_ID)
+    setStatus('active')
+    setMessage(null)
+  }, [testMode])
+
+  const resetTestGame = useCallback(() => {
+    const s = createTestSelf()
+    setSelf(s)
+    setParticipants([s])
+    setMessage(null)
+  }, [])
 
   const onKey = useCallback(
     async (digit: string) => {
+      if (testMode) {
+        if (!userId || !self) return
+        if (status !== 'active') return
+        if (self.eliminated) return
+        if (busyKey) return
+        setBusyKey(true)
+        setMessage(null)
+        try {
+          const p = localEvaluateDigit(self, digit)
+          if (p.error === 'eliminated') {
+            setMessage('כבר נפסלת (מצב בדיקה).')
+          } else if (p.error === 'pi_data') {
+            setMessage(`הגעתם לסוף הספרות המקומיות (${PI_DIGITS.length}).`)
+          } else if (p.error) {
+            setMessage(p.error)
+          } else if (p.eliminated) {
+            setMessage(`אופס! הספרה לא נכונה — נפסלת אחרי ${MAX_WRONG_ATTEMPTS} טעויות (מצב בדיקה).`)
+          } else if (p.correct === false && typeof p.wrong_attempts === 'number') {
+            const left = MAX_WRONG_ATTEMPTS - p.wrong_attempts
+            if (left === 1) {
+              setMessage('אופס! הספרה לא נכונה. נותר לך ניסיון אחד לפני פסילה.')
+            } else {
+              setMessage(`אופס! הספרה לא נכונה. נותרו ${left} ניסיונות עד פסילה.`)
+            }
+          }
+          if (!p.error) {
+            setSelf((prev) => patchSelfFromSubmitDigit(prev, p))
+            setParticipants((rows) => patchRowsFromSubmitDigit(TEST_LOCAL_USER_ID, p, rows))
+          }
+        } finally {
+          setBusyKey(false)
+        }
+        return
+      }
+
       if (!ready || !userId) {
         setMessage('כדאי להירשם בדף ההצטרפות לפני המשחק.')
         return
@@ -164,18 +312,13 @@ export function PlayPage() {
           digit,
         })
         if (error) throw error
-        const p = data as {
-          error?: string
-          ok?: boolean
-          correct?: boolean
-          eliminated?: boolean
-          digits?: number
-          wrong_attempts?: number
-        }
+        const p = data as SubmitDigitPayload
         if (p.error === 'eliminated') {
           setMessage('כבר נפסלת בתחרות הזאת.')
         } else if (p.error === 'not_active') {
           setMessage('התחרות עדיין לא התחילה.')
+        } else if (p.error === 'pi_data') {
+          setMessage('שגיאת נתוני π בשרת.')
         } else if (p.error) {
           setMessage(p.error)
         } else if (p.eliminated) {
@@ -188,15 +331,18 @@ export function PlayPage() {
             setMessage(`אופס! הספרה לא נכונה. נותרו ${left} ניסיונות עד פסילה.`)
           }
         }
-        await refreshAll()
-        await refreshSelf()
+        // עדכון מקומי מתשובת ה־RPC — בלי לקרוא שוב את כל הטבלאות; Realtime יסנכרן שינויים ממשתמשים אחרים.
+        if (!p.error) {
+          setSelf((prev) => patchSelfFromSubmitDigit(prev, p))
+          setParticipants((rows) => patchRowsFromSubmitDigit(userId, p, rows))
+        }
       } catch (err: unknown) {
         setMessage(err instanceof Error ? err.message : 'שגיאה בשליחת ספרה')
       } finally {
         setBusyKey(false)
       }
     },
-    [busyKey, competitionId, ready, refreshAll, refreshSelf, self, status, userId],
+    [busyKey, competitionId, ready, self, status, testMode, userId],
   )
 
   useEffect(() => {
@@ -234,23 +380,47 @@ export function PlayPage() {
         <section className="play-main card">
           <header className="play-head">
             <div>
-              <h1>תחרות π</h1>
+              <h1>{testMode ? 'תחרות π — מצב בדיקה' : 'תחרות π'}</h1>
               <p className="muted">
-                מצב:{' '}
-                <strong>
-                  {status === 'waiting' && 'מחכים לאדמין'}
-                  {status === 'active' && 'במהלך'}
-                  {status === 'finished' && 'הסתיימה'}
-                </strong>
+                {testMode ? (
+                  <>
+                    מצב: <strong>מקומי (ללא רשת)</strong> — אותם כללי משחק, בלי Supabase.
+                  </>
+                ) : (
+                  <>
+                    מצב:{' '}
+                    <strong>
+                      {status === 'waiting' && 'מחכים לאדמין'}
+                      {status === 'active' && 'במהלך'}
+                      {status === 'finished' && 'הסתיימה'}
+                    </strong>
+                  </>
+                )}
               </p>
             </div>
             <div className="cta-row">
-              <Link className="btn btn-ghost" to="/join">
-                עריכת שם / אווטר
-              </Link>
-              <Link className="btn btn-ghost" to="/">
-                בית
-              </Link>
+              {testMode ? (
+                <>
+                  <button type="button" className="btn btn-primary" onClick={resetTestGame}>
+                    איפוס משחק
+                  </button>
+                  <Link className="btn btn-ghost" to="/play">
+                    למסך תחרות אמיתי
+                  </Link>
+                  <Link className="btn btn-ghost" to="/">
+                    בית
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link className="btn btn-ghost" to="/join">
+                    עריכת שם / אווטר
+                  </Link>
+                  <Link className="btn btn-ghost" to="/">
+                    בית
+                  </Link>
+                </>
+              )}
             </div>
           </header>
 
@@ -290,10 +460,6 @@ export function PlayPage() {
                   role="application"
                   aria-label="הקלדת ספרות למשחק π — מקשי 0 עד 9 או לוח מספרים"
                 >
-                  <p className="hint">
-                    הקלידו ספרות 0–9 במקלדת (גם כשהמקלדת מוגדרת לעברית — שורת הספרות העליונה) או בלוח. הספרה הראשונה
-                    היא 3, אחר כך 1, ואז 4… ניתן לטעות עד {MAX_WRONG_ATTEMPTS} פעמים לפני פסילה.
-                  </p>
                   <p className="kbd-legend" aria-hidden="true">
                     <span className="kbd-legend__label">מקלדת</span>
                     {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map((k) => (
@@ -304,10 +470,19 @@ export function PlayPage() {
                   </p>
                   <div className="play-game">
                     <div className="play-game__score">
-                      <div className="digit-display" aria-live="polite">
-                        {self.digits_correct}
+                      <div
+                        className="digit-display"
+                        dir="ltr"
+                        aria-live="polite"
+                        aria-label={
+                          self.digits_correct === 0
+                            ? 'עדיין אין ספרות נכונות'
+                            : `${self.digits_correct} ספרות נכונות ברצף`
+                        }
+                      >
+                        {PI_DIGITS.slice(0, self.digits_correct)}
                       </div>
-                      <p className="digit-caption">ספרות רצופות נכונות (מתחילות ב־3 של π)</p>
+                      <p className="digit-caption">מה שכבר ניחשתם נכון (תחילת π)</p>
                     </div>
                     <div className="play-game__keys">
                       <p className="keypad-label muted small">או לוח מספרים</p>
@@ -316,7 +491,9 @@ export function PlayPage() {
                           <button
                             key={d}
                             type="button"
-                            className="key"
+                            className={
+                              self.digits_correct === 0 && d === '3' ? 'key key--first-pi-digit' : 'key'
+                            }
                             disabled={busyKey}
                             onClick={() => void onKey(d)}
                           >
@@ -337,7 +514,9 @@ export function PlayPage() {
         <aside className="play-side card">
           <h2>לוח מובילים</h2>
           <p className="muted small">
-            המיון לפי מספר ספרות נכון. במקרה של שוויון — מי שעדיין במשחק מדורג למעלה.
+            {testMode
+              ? 'מצב בדיקה: הרשימה מקומית בלבד (שחקן אחד), בלי Supabase.'
+              : 'המיון לפי מספר ספרות נכון. במקרה של שוויון — מי שעדיין במשחק מדורג למעלה.'}
           </p>
           <Leaderboard rows={participants} selfUserId={userId} />
         </aside>

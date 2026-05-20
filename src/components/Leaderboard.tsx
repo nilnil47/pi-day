@@ -6,14 +6,14 @@ type Props = {
   selfUserId: string | null
 }
 
-function rankSort(a: ParticipantRow, b: ParticipantRow): number {
+export function rankSortParticipants(a: ParticipantRow, b: ParticipantRow): number {
   if (b.digits_correct !== a.digits_correct) return b.digits_correct - a.digits_correct
   if (a.eliminated !== b.eliminated) return a.eliminated ? 1 : -1
   return new Date(a.joined_at).getTime() - new Date(b.joined_at).getTime()
 }
 
 export function Leaderboard({ rows, selfUserId }: Props) {
-  const sorted = [...rows].sort(rankSort)
+  const sorted = [...rows].sort(rankSortParticipants)
 
   return (
     <div className="leaderboard">

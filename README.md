@@ -1,3 +1,12 @@
+# Pi Day competition
+
+π is defined once in **`src/data/piDigits.ts`**. After changing it, run **`npm run sync-pi-sql`** so the copy embedded in `public.submit_digit` inside `supabase/schema.sql` stays identical, then re-run the updated function in the Supabase SQL editor (or deploy your migration).  
+The old `pi_reference` table is removed; digits are not stored as database rows.
+
+Open **`/play/test`** for local practice (no `.env`, no admin, no join). Reset anytime with **איפוס משחק**.
+
+---
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
